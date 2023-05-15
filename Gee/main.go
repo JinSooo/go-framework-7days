@@ -5,9 +5,8 @@ import (
 	"net/http"
 )
 
-func main() {
-	router := gee.New()
-
+// test route1
+func route1(router *gee.Engine) {
 	router.Get("/hello", func(ctx *gee.Context) {
 		ctx.Data(http.StatusOK, []byte("hello"))
 	})
@@ -30,6 +29,32 @@ func main() {
 		obj["age"] = "456"
 		ctx.JSON(http.StatusOK,  obj)
 	})
+}
+
+func route2(router *gee.Engine) {
+	router.Get("/", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+	})
+
+	router.Get("/hello", func(c *gee.Context) {
+		// expect /hello?name=geektutu
+		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Query("name"), c.Path)
+	})
+
+	router.Get("/hello/:name", func(c *gee.Context) {
+		// expect /hello/geektutu
+		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("name"), c.Path)
+	})
+
+	router.Get("/assets/*filepath", func(c *gee.Context) {
+		c.JSON(http.StatusOK, gee.H{"filepath": c.Param("filepath")})
+	})
+}
+
+func main() {
+	router := gee.New()
+
+	route2(router)
 
 	router.Run(":8080")
 }
