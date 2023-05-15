@@ -19,7 +19,7 @@ func route1(router *gee.Engine) {
 		}
 	})
 	router.Get("/query", func(ctx *gee.Context) {
-			ctx.String(http.StatusOK, "Query %v", ctx.Query("t"))
+		ctx.String(http.StatusOK, "Query %v", ctx.Query("t"))
 	})
 	router.Get("/json", func(ctx *gee.Context) {
 		ctx.SetHeader("Prisma", "ok")
@@ -27,7 +27,7 @@ func route1(router *gee.Engine) {
 		obj := make(gee.H)
 		obj["name"] = "123"
 		obj["age"] = "456"
-		ctx.JSON(http.StatusOK,  obj)
+		ctx.JSON(http.StatusOK, obj)
 	})
 }
 
