@@ -15,10 +15,6 @@ func New() *Engine {
 	return &Engine{router: newRouter()}
 }
 
-func (engine *Engine) addRoute(method string, pattern string, handler HandlerFunc) {
-	engine.router.addRoute(method, pattern, handler)
-}
-
 func (engine *Engine) Get(pattern string, handler HandlerFunc) {
 	engine.router.addRoute("GET", pattern, handler)
 }
@@ -35,6 +31,7 @@ func (engine *Engine) Run(addr string) error {
 
 // 真正的处理请求的地方
 func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	// 当来请求时，实例化一个Context
 	ctx := newContext(res, req)
 	engine.router.handler(ctx)
 }
