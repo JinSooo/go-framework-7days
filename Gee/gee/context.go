@@ -48,20 +48,21 @@ func (ctx *Context) Status(code int){
 }
 
 // 设置响应头
-func (ctx *Context) setHeader(key string, value string){
+func (ctx *Context) SetHeader(key string, value string){
 	ctx.Res.Header().Set(key, value)
 }
 
 // 以String类型返回
 func (ctx *Context) String(code int, format string, values ...interface{}) {
-	ctx.setHeader("Content-Type", "text/plain")
+	// 注意调用顺序应该是Header().Set 然后WriteHeader() 最后是Write()，不然header不会生效
+	ctx.SetHeader("Content-Type", "text/plain")
 	ctx.Status(code)
 	ctx.Res.Write([]byte(fmt.Sprintf(format, values...)))
 }
 
 // 以JSON类型返回
 func (ctx *Context) JSON(code int, obj interface{}) {
-	ctx.setHeader("Content-Type", "application/json")
+	ctx.SetHeader("Content-Type", "application/json")
 	ctx.Status(code)
 	encoder := json.NewEncoder(ctx.Res)
 	if err := encoder.Encode(obj); err != nil {
@@ -77,7 +78,7 @@ func (ctx *Context) Data(code int, data []byte) {
 
 // 返回HTML
 func (ctx *Context) HTML(code int, html string) {
-	ctx.setHeader("Content-Type", "text/html")
+	ctx.SetHeader("Content-Type", "text/html")
 	ctx.Status(code)
 	ctx.Res.Write([]byte(html))
 }
