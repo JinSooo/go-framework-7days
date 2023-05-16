@@ -7,12 +7,17 @@ import (
 
 
 type Engine struct {
+	*RouterGroup
 	router *Router
+	groups []*RouterGroup
 }
 
 // 实例化一个Engine
 func New() *Engine {
-	return &Engine{router: newRouter()}
+	engine := &Engine{router: newRouter()}
+	engine.RouterGroup = &RouterGroup{engine: engine}
+	engine.groups = []*RouterGroup{engine.RouterGroup}
+	return engine
 }
 
 func (engine *Engine) Get(pattern string, handler HandlerFunc) {

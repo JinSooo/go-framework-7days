@@ -84,8 +84,10 @@ func (router *Router) getRoute(method string, path string) (*node, map[string]st
 	parts := parsePattern(node.pattern)
 	for i, part := range parts {
 		if part[0] == ':' {
+			// 拿到:后面的模糊匹配字符
 			params[part[1:]] = searchParts[i]
 		} else if part[0] == '*' && len(part) > 1 {
+			// 拿到*后面的模糊匹配字符， 将searchParts[i:]后的字符都是*的匹配字符
 			params[part[1:]] = strings.Join(searchParts[i:], "/")
 			break
 		}
