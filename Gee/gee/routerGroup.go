@@ -24,6 +24,11 @@ func (routerGroup *RouterGroup) Group(prefix string) *RouterGroup {
 	return newGroup
 }
 
+// 添加中间件
+func (routerGroup *RouterGroup) Use(middlewares ...HandlerFunc) {
+	routerGroup.middlewares = append(routerGroup.middlewares, middlewares...)
+}
+
 // 分组上添加路由
 func (routerGroup *RouterGroup) addRoute(method string, pattern string, handler HandlerFunc) {
 	compositionPattern := routerGroup.prefix + pattern

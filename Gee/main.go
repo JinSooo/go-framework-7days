@@ -2,7 +2,10 @@ package main
 
 import (
 	"gee-demo/gee"
+	"gee-demo/gee/middlewares"
+	"log"
 	"net/http"
+	"time"
 )
 
 // test route1
@@ -82,13 +85,38 @@ func route3(router *gee.Engine) {
 		})
 
 	}
+}
 
+func onlyForV2() gee.HandlerFunc {
+	return func(ctx *gee.Context) {
+		start := time.Now()
+		ctx.Next()
+		log.Printf("[M - onlyForV2] [%d] %s in %v", ctx.StatusCode, ctx.Req.RequestURI, time.Since(start))
+	}
+}
+
+func route4(router *gee.Engine) {
+	// 全局中间件
+	router.Use(middlewares.Logger())
+	router.Get("/", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+	})
+
+	v2 := router.Group("/v2")
+	// 路由组的中间件
+	v2.Use(onlyForV2()) // v2 group middleware
+	{
+		v2.Get("/hello/:name", func(c *gee.Context) {
+			// expect /hello/geektutu
+			c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("name"), c.Path)
+		})
+	}
 }
 
 func main() {
 	router := gee.New()
 
-	route3(router)
+	route4(router)
 
 	router.Run(":8080")
 }

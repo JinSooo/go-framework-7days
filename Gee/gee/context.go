@@ -20,6 +20,10 @@ type Context struct {
 	Params map[string]string
 	// res
 	StatusCode int
+	// middlewares
+	middlewares []HandlerFunc
+	// 当前middlewares的执行位置
+	index int
 }
 
 // 工厂函数，实例化一个Context
@@ -29,7 +33,20 @@ func newContext(res http.ResponseWriter, req *http.Request) *Context {
 		Res: res,
 		Path: req.URL.Path,
 		Method: req.Method,
+		index: -1,
 	}
+}
+
+// 执行下一个中间件
+func (ctx *Context) Next() {
+	// size := len(ctx.middlewares)
+	// ctx.index++
+	// for ; ctx.index < size; ctx.index++  {
+	// 	ctx.middlewares[ctx.index](ctx)
+	// }
+	ctx.index++
+	// 执行接下来的中间件
+	ctx.middlewares[ctx.index](ctx)
 }
 
 // 获取指定路由参数

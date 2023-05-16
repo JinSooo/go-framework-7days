@@ -98,8 +98,6 @@ func (router *Router) getRoute(method string, path string) (*node, map[string]st
 
 // 路由处理
 func (router *Router) handler(ctx *Context) {
-	log.Printf("Handler Route %4s - %s - %s", ctx.Method, ctx.Path, ctx.Req.Host)
-
 	// 获取到指定路由
 	route, params := router.getRoute(ctx.Method, ctx.Path)
 
@@ -107,9 +105,15 @@ func (router *Router) handler(ctx *Context) {
 		// 给ctx传入params
 		ctx.Params = params
 		key := ctx.Method + "-" + route.pattern
-		// 执行对应的handler
-		router.handlers[key](ctx)
+
+		// 将路由处理作为最后一个中间件去执行
+		ctx.middlewares = append(ctx.middlewares, router.handlers[key])
 	} else {
-		ctx.String(http.StatusNotFound, "404 NOT FOUND: %s\n", ctx.Path)
+		ctx.middlewares = append(ctx.middlewares, func(ctx *Context) {
+			ctx.String(http.StatusNotFound, "404 NOT FOUND: %s\n", ctx.Path)
+		})
 	}
+
+	// 开始执行所有中间件
+	ctx.Next()
 }

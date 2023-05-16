@@ -3,6 +3,7 @@ package gee
 import (
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 
@@ -36,7 +37,17 @@ func (engine *Engine) Run(addr string) error {
 
 // 真正的处理请求的地方
 func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	// 判断哪些中间件需要被执行
+	var middlewares []HandlerFunc
+	for _, group := range engine.groups {
+		// 筛选对应的中间件
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
+
 	// 当来请求时，实例化一个Context
 	ctx := newContext(res, req)
+	ctx.middlewares = middlewares
 	engine.router.handler(ctx)
 }
