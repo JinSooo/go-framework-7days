@@ -24,6 +24,8 @@ type Context struct {
 	middlewares []HandlerFunc
 	// 当前middlewares的执行位置
 	index int
+	// engine
+	engine *Engine
 }
 
 // 工厂函数，实例化一个Context
@@ -100,8 +102,11 @@ func (ctx *Context) Data(code int, data []byte) {
 }
 
 // 返回HTML
-func (ctx *Context) HTML(code int, html string) {
+func (ctx *Context) HTML(code int, templateName string, data interface{}) {
 	ctx.SetHeader("Content-Type", "text/html")
 	ctx.Status(code)
-	ctx.Res.Write([]byte(html))
+	// ctx.Res.Write([]byte(html))
+	if err := ctx.engine.htmlTemplates.ExecuteTemplate(ctx.Res, templateName, data); err != nil {
+		http.Error(ctx.Res, err.Error(), 500)
+	}
 }

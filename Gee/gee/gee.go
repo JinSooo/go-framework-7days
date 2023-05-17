@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"text/template"
 )
 
 
@@ -11,6 +12,12 @@ type Engine struct {
 	*RouterGroup
 	router *Router
 	groups []*RouterGroup
+
+	// html渲染
+	// 所有HTML模板
+	htmlTemplates *template.Template
+	// 自定义模板渲染函数，用于模板里的函数调用
+	funcMap template.FuncMap
 }
 
 // 实例化一个Engine
@@ -49,5 +56,18 @@ func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// 当来请求时，实例化一个Context
 	ctx := newContext(res, req)
 	ctx.middlewares = middlewares
+	ctx.engine = engine
 	engine.router.handler(ctx)
+}
+
+/* ------------------------------- HTML Render ------------------------------ */
+// 设置自定义渲染函数
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap)  {
+	engine.funcMap = funcMap
+}
+
+// 加载HTML模板
+func (engine *Engine) LoadHTMLGlob(templatePath string)  {
+	// 实例化一个模板并将Funcs加入进去，并执行解析的模板文件夹
+	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(templatePath))
 }

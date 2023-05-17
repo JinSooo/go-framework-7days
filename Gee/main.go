@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"gee-demo/gee"
 	"gee-demo/gee/middlewares"
 	"log"
 	"net/http"
+	"text/template"
 	"time"
 )
 
@@ -36,7 +38,7 @@ func route1(router *gee.Engine) {
 
 func route2(router *gee.Engine) {
 	router.Get("/", func(c *gee.Context) {
-		c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+		// c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
 	})
 
 	router.Get("/hello", func(c *gee.Context) {
@@ -56,13 +58,13 @@ func route2(router *gee.Engine) {
 
 func route3(router *gee.Engine) {
 	router.Get("/index", func(c *gee.Context) {
-		c.HTML(http.StatusOK, "<h1>Index Page</h1>")
+		// c.HTML(http.StatusOK, "<h1>Index Page</h1>")
 	})
 
 	v1 := router.Group("/v1")
 	{
 		v1.Get("/", func(c *gee.Context) {
-			c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+			// c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
 		})
 
 		v1.Get("/hello", func(c *gee.Context) {
@@ -99,7 +101,7 @@ func route4(router *gee.Engine) {
 	// 全局中间件
 	router.Use(middlewares.Logger())
 	router.Get("/", func(c *gee.Context) {
-		c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+		// c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
 	})
 
 	v2 := router.Group("/v2")
@@ -117,12 +119,55 @@ func routeStatic(router *gee.Engine) {
 	router.Static("/assets", "./assets")
 }
 
+type student struct {
+	Name string
+	Age  int8
+}
+
+func FormatAsDate(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
+}
+
+func routeHTML(router *gee.Engine) {
+	router.Static("/assets", "./assets")
+
+	// 注意顺序
+	router.SetFuncMap(template.FuncMap{
+		"FormatAsDate": FormatAsDate,
+	})
+	router.LoadHTMLGlob("templates/*")
+
+	stu1 := &student{Name: "Geektutu", Age: 20}
+	stu2 := &student{Name: "Jack", Age: 22}
+	router.Get("/", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "css.tmpl", gee.H{
+			"title": "gee",
+			"now":   time.Now(),
+		})
+	})
+
+	router.Get("/students", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "arr.tmpl", gee.H{
+			"title":  "gee",
+			"stuArr": [2]*student{stu1, stu2},
+		})
+	})
+
+	router.Get("/date", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "custom_func.tmpl", gee.H{
+			"title": "gee",
+			"now":   time.Date(2019, 8, 17, 0, 0, 0, 0, time.UTC),
+		})
+	})
+}
+
 func main() {
 	router := gee.New()
 	// 全局中间件
 	router.Use(middlewares.Logger())
 
-	routeStatic(router)
+	routeHTML(router)
 
 	router.Run(":8080")
 }
