@@ -15,7 +15,7 @@ type Context struct {
 	Req *http.Request
 	Res http.ResponseWriter
 	// req
-	Path string
+	Path   string
 	Method string
 	Params map[string]string
 	// res
@@ -31,11 +31,11 @@ type Context struct {
 // 工厂函数，实例化一个Context
 func newContext(res http.ResponseWriter, req *http.Request) *Context {
 	return &Context{
-		Req: req,
-		Res: res,
-		Path: req.URL.Path,
+		Req:    req,
+		Res:    res,
+		Path:   req.URL.Path,
 		Method: req.Method,
-		index: -1,
+		index:  -1,
 	}
 }
 
@@ -57,23 +57,23 @@ func (ctx *Context) Param(key string) string {
 }
 
 // 获取表单属性
-func (ctx *Context) PostForm(key string) string{
+func (ctx *Context) PostForm(key string) string {
 	return ctx.Req.FormValue(key)
 }
 
 // 查询Query值
-func (ctx *Context) Query(key string) string{
+func (ctx *Context) Query(key string) string {
 	return ctx.Req.URL.Query().Get(key)
 }
 
 // 设置状态码
-func (ctx *Context) Status(code int){
+func (ctx *Context) Status(code int) {
 	ctx.StatusCode = code
 	ctx.Res.WriteHeader(code)
 }
 
 // 设置响应头
-func (ctx *Context) SetHeader(key string, value string){
+func (ctx *Context) SetHeader(key string, value string) {
 	ctx.Res.Header().Set(key, value)
 }
 
@@ -91,8 +91,15 @@ func (ctx *Context) JSON(code int, obj interface{}) {
 	ctx.Status(code)
 	encoder := json.NewEncoder(ctx.Res)
 	if err := encoder.Encode(obj); err != nil {
-		http.Error(ctx.Res, err.Error(), 500)
+		ctx.Fatal(500, err.Error())
 	}
+}
+
+// 处理错误
+func (ctx *Context) Fatal(code int, message string) {
+	// 直接跳到中间件的最后
+	ctx.index = len(ctx.middlewares)
+	ctx.JSON(code, H{"message": message})
 }
 
 // 直接返回data
@@ -107,6 +114,6 @@ func (ctx *Context) HTML(code int, templateName string, data interface{}) {
 	ctx.Status(code)
 	// ctx.Res.Write([]byte(html))
 	if err := ctx.engine.htmlTemplates.ExecuteTemplate(ctx.Res, templateName, data); err != nil {
-		http.Error(ctx.Res, err.Error(), 500)
+		ctx.Fatal(500, err.Error())
 	}
 }
