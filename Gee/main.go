@@ -113,10 +113,16 @@ func route4(router *gee.Engine) {
 	}
 }
 
+func routeStatic(router *gee.Engine) {
+	router.Static("/assets", "./assets")
+}
+
 func main() {
 	router := gee.New()
+	// 全局中间件
+	router.Use(middlewares.Logger())
 
-	route4(router)
+	routeStatic(router)
 
 	router.Run(":8080")
 }
