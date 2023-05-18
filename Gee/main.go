@@ -162,12 +162,23 @@ func routeHTML(router *gee.Engine) {
 	})
 }
 
+func routeRecovery(router *gee.Engine) {
+	router.Get("/", func(c *gee.Context) {
+		c.String(http.StatusOK, "Hello Geektutu\n")
+	})
+	// index out of range for testing Recovery()
+	router.Get("/panic", func(c *gee.Context) {
+		names := []string{"geektutu"}
+		c.String(http.StatusOK, names[100])
+	})
+}
+
 func main() {
 	router := gee.New()
 	// 全局中间件
 	router.Use(middlewares.Logger())
 
-	routeHTML(router)
+	routeRecovery(router)
 
 	router.Run(":8080")
 }

@@ -25,6 +25,11 @@ func New() *Engine {
 	engine := &Engine{router: newRouter()}
 	engine.RouterGroup = &RouterGroup{engine: engine}
 	engine.groups = []*RouterGroup{engine.RouterGroup}
+
+	// 添加默认中间件
+	// 错误恢复
+	engine.Use(Recovery())
+
 	return engine
 }
 
