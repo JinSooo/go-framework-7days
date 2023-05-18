@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"gee-demo/gee"
-	"gee-demo/gee/middlewares"
 	"log"
 	"net/http"
 	"text/template"
@@ -99,7 +98,7 @@ func onlyForV2() gee.HandlerFunc {
 
 func route4(router *gee.Engine) {
 	// 全局中间件
-	router.Use(middlewares.Logger())
+	// router.Use(middlewares.Logger())
 	router.Get("/", func(c *gee.Context) {
 		// c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
 	})
@@ -174,9 +173,7 @@ func routeRecovery(router *gee.Engine) {
 }
 
 func main() {
-	router := gee.New()
-	// 全局中间件
-	router.Use(middlewares.Logger())
+	router := gee.Default()
 
 	routeRecovery(router)
 

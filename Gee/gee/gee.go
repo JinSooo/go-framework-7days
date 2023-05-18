@@ -7,7 +7,6 @@ import (
 	"text/template"
 )
 
-
 type Engine struct {
 	*RouterGroup
 	router *Router
@@ -26,9 +25,14 @@ func New() *Engine {
 	engine.RouterGroup = &RouterGroup{engine: engine}
 	engine.groups = []*RouterGroup{engine.RouterGroup}
 
-	// 添加默认中间件
-	// 错误恢复
-	engine.Use(Recovery())
+	return engine
+}
+
+// 默认使用 Logger & Recovery 中间件
+func Default() *Engine {
+	engine := New()
+
+	engine.Use(Logger(), Recovery())
 
 	return engine
 }
@@ -67,12 +71,12 @@ func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 /* ------------------------------- HTML Render ------------------------------ */
 // 设置自定义渲染函数
-func (engine *Engine) SetFuncMap(funcMap template.FuncMap)  {
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
 	engine.funcMap = funcMap
 }
 
 // 加载HTML模板
-func (engine *Engine) LoadHTMLGlob(templatePath string)  {
+func (engine *Engine) LoadHTMLGlob(templatePath string) {
 	// 实例化一个模板并将Funcs加入进去，并执行解析的模板文件夹
 	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(templatePath))
 }

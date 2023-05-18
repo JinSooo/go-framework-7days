@@ -1,13 +1,12 @@
-package middlewares
+package gee
 
 import (
-	"gee-demo/gee"
 	"log"
 	"time"
 )
 
-func Logger() gee.HandlerFunc {
-	return func(ctx *gee.Context) {
+func Logger() HandlerFunc {
+	return func(ctx *Context) {
 		start := time.Now()
 		ctx.Next()
 		log.Printf("[M - Logger] [%d] %s in %v", ctx.StatusCode, ctx.Req.RequestURI, time.Since(start))
