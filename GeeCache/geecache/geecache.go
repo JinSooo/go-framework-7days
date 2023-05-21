@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"fmt"
+	"geecache/geecache/proto/geecachepb"
 	"geecache/geecache/singleflight"
 	"log"
 	"sync"
@@ -147,12 +148,19 @@ func (group *Group) load(key string) (ByteView, error) {
 
 // 从远程节点获取源数据
 func (group *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
-	bytes, err := peer.Get(group.name, key)
+	// bytes, err := peer.Get(group.name, key)
+	req := &geecachepb.Request{
+		Group: group.name,
+		Key: key,
+	}
+	res := &geecachepb.Response{}
+
+	err := peer.Get(req, res)
 	if err != nil {
 		return ByteView{}, err
 	}
 
-	return ByteView{b: bytes}, nil
+	return ByteView{b: res.Value}, nil
 }
 
 // getLocally 调用用户回调函数 g.getter.Get() 获取源数据

@@ -3,12 +3,15 @@ package geecache
 import (
 	"fmt"
 	"geecache/geecache/consistenthash"
+	"geecache/geecache/proto/geecachepb"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+
+	"google.golang.org/protobuf/proto"
 )
 
 /* -------------------------- 提供缓存被其他节点访问的能力(基于http) -------------------------- */
@@ -75,12 +78,16 @@ func (pool *HTTPPool) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// protobuf Marshal
+	body, err := proto.Marshal(&geecachepb.Response{Value: bytes.ByteSlice()})
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// application/octet-stream: 字节流传输
 	res.Header().Set("Content-Type", "application/octet-stream")
-	res.Write(bytes.ByteSlice())
-	// 字符串
-	// res.Header().Set("Content-Type", "text/plain")
-	// res.Write(bytes.ByteSlice())
+	res.Write(body)
 }
 
 /* ---------------------------------- peer ---------------------------------- */
@@ -91,33 +98,37 @@ type httpGetter struct {
 }
 
 // 实现PeerGetter接口，获取远程节点上的缓存值
-func (h *httpGetter) Get(group string, key string) ([]byte, error) {
+func (h *httpGetter) Get(in *geecachepb.Request, out *geecachepb.Response) error {
 	// 获取远程节点的地址
-	// fmt.Println(fmt.Sprintf("%v%v/%v", h.baseUrl, url.QueryEscape(group), url.QueryEscape(key)))
-	// fmt.Println(fmt.Sprintf(h.baseUrl, url.QueryEscape(group), url.QueryEscape(key)))
 	// url.QueryEscape 字符转义
-	remoteUrl := fmt.Sprintf("%v/%v/%v", h.baseUrl, url.QueryEscape(group), url.QueryEscape(key))
+	remoteUrl := fmt.Sprintf("%v/%v/%v", h.baseUrl, url.QueryEscape(in.GetGroup()), url.QueryEscape(in.GetKey()))
 
 	// HTTP客户端请求获取缓存
 	res, err := http.Get(remoteUrl)
 	if err != nil {
-		return []byte{}, err
+		return err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return []byte{}, fmt.Errorf("server returned: %v", res.Status)
+		return fmt.Errorf("server returned: %v", res.Status)
 	}
 
 	// 拿到缓存值
 	bytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		return []byte{}, err
+		return err
 	}
 
-	log.Printf("[Peer %s] get key %s",h.baseUrl, key)
+	// protobuf Unmarshal
+	err = proto.Unmarshal(bytes, out)
+	if err != nil {
+		return err
+	}
 
-	return bytes, nil
+	log.Printf("[Peer %s] get key %s",h.baseUrl, in.GetKey())
+
+	return nil
 }
 
 // 实现PeerPicker接口

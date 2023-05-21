@@ -1,5 +1,9 @@
 package geecache
 
+import (
+	"geecache/geecache/proto/geecachepb"
+)
+
 /* ---------------------------------- 分布式节点 --------------------------------- */
 
 /**
@@ -18,5 +22,7 @@ type PeerPicker interface {
 // PeerGetter 就对应于上述流程中的 HTTP 客户端
 type PeerGetter interface {
 	// 用于从对应 group 查找缓存值
-	Get(group string, key string) ([]byte, error)
+	// Get(group string, key string) ([]byte, error)
+	// protobuf改造
+	Get(in *geecachepb.Request, out *geecachepb.Response) error
 }
