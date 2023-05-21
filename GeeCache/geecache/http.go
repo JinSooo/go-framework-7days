@@ -3,7 +3,7 @@ package geecache
 import (
 	"fmt"
 	"geecache/geecache/consistenthash"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -110,7 +110,7 @@ func (h *httpGetter) Get(group string, key string) ([]byte, error) {
 	}
 
 	// 拿到缓存值
-	bytes, err := ioutil.ReadAll(res.Body)
+	bytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return []byte{}, err
 	}
