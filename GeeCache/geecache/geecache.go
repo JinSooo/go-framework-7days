@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -50,6 +51,7 @@ type Group struct {
 	getter Getter
 	// 并发缓存
 	mainCache cache
+	peers     PeerPicker
 }
 
 var (
@@ -87,12 +89,22 @@ func GetGroup(name string) *Group {
 	return group
 }
 
+// 注册一个PeerPicker来选择远程节点
+func (group *Group) RegisterPeers(peers PeerPicker) {
+	if group.peers != nil {
+		panic("RegisterPeerPicker called more than once")
+	}
+
+	group.peers = peers
+}
+
 /* ---------------------------------- 获取缓存 ---------------------------------- */
 func (group *Group) Get(key string) (ByteView, error) {
 	if key == "" {
 		return ByteView{}, fmt.Errorf("key is required")
 	}
 
+	// ⑴缓存
 	// 从 mainCache 中查找缓存，如果存在则返回缓存值
 	if value, ok := group.mainCache.get(key); ok {
 		fmt.Println("[GeeCache] hit")
@@ -104,7 +116,29 @@ func (group *Group) Get(key string) (ByteView, error) {
 
 // 缓存没命中时，加载本地或远程数据源
 func (group *Group) load(key string) (ByteView, error) {
+	// ⑵远程节点
+	if group.peers != nil {
+		if peer, ok := group.peers.PickPeer(key); ok {
+			value, err := group.getFromPeer(peer, key)
+			if err == nil {
+				return value, nil
+			}
+			log.Println("[GeeCache] Failed to get from peer", err)
+		}
+	}
+
+	// ⑶本地节点
 	return group.getLocally(key)
+}
+
+// 从远程节点获取源数据
+func (group *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(group.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+
+	return ByteView{b: bytes}, nil
 }
 
 // getLocally 调用用户回调函数 g.getter.Get() 获取源数据
@@ -124,6 +158,6 @@ func (group *Group) getLocally(key string) (ByteView, error) {
 }
 
 // 将源数据添加到缓存 mainCache 中
-func (group *Group) populateCache(key string, value ByteView)  {
+func (group *Group) populateCache(key string, value ByteView) {
 	group.mainCache.set(key, value)
 }
