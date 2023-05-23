@@ -2,7 +2,9 @@ package session
 
 import (
 	"database/sql"
+	"geeorm/dialect"
 	"geeorm/log"
+	"geeorm/schema"
 	"strings"
 )
 
@@ -21,10 +23,13 @@ type Session struct {
 	// sql语句及占位符
 	sql     strings.Builder
 	sqlVars []interface{}
+	// 对象-表 映射
+	dialect dialect.Dialect
+	refTable *schema.Schema
 }
 
-func New(db *sql.DB) *Session {
-	return &Session{db: db}
+func New(db *sql.DB, dialect dialect.Dialect) *Session {
+	return &Session{db: db, dialect: dialect}
 }
 
 func (session *Session) Clear() {
