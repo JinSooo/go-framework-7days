@@ -28,6 +28,8 @@ func (session *Session) Insert(values ...interface{}) (int64, error) {
 	recordValues := make([]interface{}, 0)
 
 	for _, val := range values {
+		session.CallHook(BeforeInsert, val)
+
 		// 根据val对象映射出对应的schema表
 		table := session.Model(val).RefTable()
 		// 设置insert语句
@@ -44,6 +46,8 @@ func (session *Session) Insert(values ...interface{}) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	session.CallHook(AfterInsert, nil)
 	return result.RowsAffected()
 }
 
@@ -58,6 +62,8 @@ func (session *Session) Insert(values ...interface{}) (int64, error) {
  */
 
 func (session *Session) Find(values interface{}) error {
+	session.CallHook(BeforeQuery, nil)
+
 	destSlice := reflect.Indirect(reflect.ValueOf(values))
 	// destSlice.Type().Elem() 获取切片的单个元素的类型
 	destType := destSlice.Type().Elem()
@@ -85,6 +91,9 @@ func (session *Session) Find(values interface{}) error {
 		if err := rows.Scan(value...); err != nil {
 			return err
 		}
+
+		session.CallHook(AfterQuery, dest.Addr().Interface())
+
 		// 将 dest 添加到切片 destSlice 中
 		destSlice.Set(reflect.Append(destSlice, dest))
 	}
@@ -94,6 +103,8 @@ func (session *Session) Find(values interface{}) error {
 
 // 支持对象模式或平铺模式
 func (session *Session) Update(values ...interface{}) (int64, error) {
+	session.CallHook(BeforeUpdate, nil)
+
 	// 对象
 	m, ok := values[0].(map[string]interface{})
 	if !ok {
@@ -112,10 +123,13 @@ func (session *Session) Update(values ...interface{}) (int64, error) {
 		return 0, err
 	}
 
+	session.CallHook(AfterUpdate, nil)
 	return result.RowsAffected()
 }
 
 func (session *Session) Delete() (int64, error) {
+	session.CallHook(BeforeDelete, nil)
+
 	session.clause.Set(clause.DELETE, session.RefTable().Name)
 	sql, vars := session.clause.Build(clause.DELETE, clause.WHERE)
 	result, err := session.Raw(sql, vars...).Exec()
@@ -124,6 +138,7 @@ func (session *Session) Delete() (int64, error) {
 		return 0, err
 	}
 
+	session.CallHook(AfterDelete, nil)
 	return result.RowsAffected()
 }
 
