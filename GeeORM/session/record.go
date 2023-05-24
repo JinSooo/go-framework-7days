@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"geeorm/clause"
 	"reflect"
 )
@@ -89,4 +90,89 @@ func (session *Session) Find(values interface{}) error {
 	}
 
 	return rows.Close()
+}
+
+// 支持对象模式或平铺模式
+func (session *Session) Update(values ...interface{}) (int64, error) {
+	// 对象
+	m, ok := values[0].(map[string]interface{})
+	if !ok {
+		// 平铺
+		m = make(map[string]interface{})
+		for i := 0; i < len(values); i += 2 {
+			m[values[i].(string)] = values[i+1]
+		}
+	}
+
+	session.clause.Set(clause.UPDATE, session.RefTable().Name, m)
+	sql, vars := session.clause.Build(clause.UPDATE, clause.WHERE)
+	result, err := session.Raw(sql, vars...).Exec()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
+func (session *Session) Delete() (int64, error) {
+	session.clause.Set(clause.DELETE, session.RefTable().Name)
+	sql, vars := session.clause.Build(clause.DELETE, clause.WHERE)
+	result, err := session.Raw(sql, vars...).Exec()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
+func (session *Session) Count() (int64, error) {
+	session.clause.Set(clause.COUNT, session.RefTable().Name)
+	sql, vars := session.clause.Build(clause.COUNT)
+	row := session.Raw(sql, vars...).QueryRow()
+
+	var tmp int64
+	if err := row.Scan(&tmp); err != nil {
+		return 0, err
+	}
+
+	return tmp, nil
+}
+
+/* -------------------------------- 链式调用的条件子句 ------------------------------- */
+
+func (session *Session) Where(desc string, args ...interface{}) *Session {
+	var vars []interface{}
+	session.clause.Set(clause.WHERE, append(append(vars, desc), args...)...)
+	return session
+}
+
+func (session *Session) Limit(num int) *Session {
+	session.clause.Set(clause.LIMIT, num)
+	return session
+}
+
+func (session *Session) OrderBy(desc string) *Session {
+	session.clause.Set(clause.ORDERBY, desc)
+	return session
+}
+
+/* ---------------------------------- 简用方法 ---------------------------------- */
+
+func (session *Session) First(value interface{}) error {
+	dest := reflect.Indirect(reflect.ValueOf(value))
+	// Elem() 获取指针指向的元素
+	// Addr() 返回对象地址的指针值
+	destSlice := reflect.New(reflect.SliceOf(dest.Type())).Elem()
+
+	if err := session.Limit(1).Find(destSlice.Addr().Interface()); err != nil {
+		return err
+	}
+	if destSlice.Len() == 0 {
+		return errors.New("NOT FOUND")
+	}
+
+	dest.Set(destSlice.Index(0))
+	return nil
 }
