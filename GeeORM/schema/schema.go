@@ -39,8 +39,8 @@ func Parse(dest interface{}, dia dialect.Dialect) *Schema {
 	// 获取结构体值的所有属性的类型信息
 	modelType := reflect.Indirect(reflect.ValueOf(dest)).Type()
 	schema := &Schema{
-		Model: dest,
-		Name: modelType.Name(),
+		Model:    dest,
+		Name:     modelType.Name(),
 		fieldMap: make(map[string]*Field),
 	}
 
@@ -65,4 +65,16 @@ func Parse(dest interface{}, dia dialect.Dialect) *Schema {
 	}
 
 	return schema
+}
+
+// 根据数据库中列的顺序，从对象中找到对应的值，按顺序平铺
+func (schema *Schema) RecordValues(dest interface{}) []interface{} {
+	destValue := reflect.Indirect(reflect.ValueOf(dest))
+	var fieldValues []interface{}
+
+	for _, field := range schema.Fields {
+		fieldValues = append(fieldValues, destValue.FieldByName(field.Name).Interface())
+	}
+
+	return fieldValues
 }
