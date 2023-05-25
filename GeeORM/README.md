@@ -89,11 +89,224 @@ for i := 0; i < typ.NumField(); i++ {
 }
 ```
 
-reflect 的一些方法
+### reflect 的一些方法
 
 ```go
 reflect.ValueOf() 获取指针对应的反射值。
 reflect.Indirect() 获取指针指向的对象的反射值。
 (reflect.Type).Name() 返回类名(字符串)。
 (reflect.Type).Field(i) 获取第 i 个成员变量。
+```
+
+## 特性 👇👇👇
+
+## 基本使用
+
+```go
+var (
+	user1 = &User{"Tom", 18}
+	user2 = &User{"Sam", 25}
+	user3 = &User{"Jack", 25}
+)
+
+func testRecordInit(t *testing.T) *Session {
+	t.Helper()
+
+	session := NewSession().Model(&User{})
+	err1 := session.DropTable()
+	err2 := session.CreateTable()
+	_, err3 := session.Insert(user1, user2)
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatal("failed init test records")
+	}
+
+	return session
+}
+
+func TestInsert(t *testing.T) {
+	session := testRecordInit(t)
+
+	affected, err := session.Insert(user3)
+	if err != nil || affected != 1 {
+		t.Fatal("failed to create record")
+	}
+}
+
+func TestFind(t *testing.T) {
+	session := testRecordInit(t)
+
+	var users []User
+	err := session.Find(&users)
+	if err != nil || len(users) != 2 {
+		t.Fatal("failed to query all")
+	}
+}
+
+func TestTable(t *testing.T) {
+	gee := NewSession()
+	fmt.Printf("gee: %v\n", gee)
+	s := gee.Model(&User{})
+	_ = s.DropTable()
+	_ = s.CreateTable()
+	if !s.HasTable() {
+		t.Fatal("Failed to create table User")
+	}
+}
+
+func TestSession_Limit(t *testing.T) {
+	s := testRecordInit(t)
+	var users []User
+	err := s.Limit(1).Find(&users)
+	if err != nil || len(users) != 1 {
+		t.Fatal("failed to query with limit condition")
+	}
+}
+
+func TestSession_Update(t *testing.T) {
+	s := testRecordInit(t)
+	affected, _ := s.Where("Name = ?", "Tom").Update("Age", 30)
+	u := &User{}
+	_ = s.OrderBy("Age DESC").First(u)
+
+	if affected != 1 || u.Age != 30 {
+		t.Fatal("failed to update")
+	}
+}
+
+func TestSession_DeleteAndCount(t *testing.T) {
+	s := testRecordInit(t)
+	affected, _ := s.Where("Name = ?", "Tom").Delete()
+	count, _ := s.Count()
+
+	if affected != 1 || count != 1 {
+		t.Fatal("failed to delete or count")
+	}
+}
+```
+
+## Hooks
+
+```go
+type Account struct {
+	ID       int `geeorm:"PRIMARY KEY"`
+	Password string
+}
+
+func (account *Account) BeforeInsert(s *Session) error {
+	log.Info("before inert", account)
+	account.ID += 1000
+	return nil
+}
+
+func (account *Account) AfterQuery(s *Session) error {
+	log.Info("after query", account)
+	account.Password = "******"
+	return nil
+}
+
+func TestSession_CallMethod(t *testing.T) {
+	s := NewSession().Model(&Account{})
+	_ = s.DropTable()
+	_ = s.CreateTable()
+	_, _ = s.Insert(&Account{1, "123456"}, &Account{2, "qwerty"})
+
+	u := &Account{}
+
+	err := s.First(u)
+	if err != nil || u.ID != 1001 || u.Password != "******" {
+		t.Fatal("Failed to call hooks after query, got", u)
+	}
+}
+```
+
+## 事务
+
+```go
+type User struct {
+	Name string `geeorm:"PRIMARY KEY"`
+	Age  int
+}
+
+func OpenDB(t *testing.T) *Engine {
+	t.Helper()
+	engine, err := NewEngine("sqlite3", "../db/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return engine
+}
+
+func TestEngine_Transaction(t *testing.T) {
+	t.Run("rollback", func(t *testing.T) {
+		engine := OpenDB(t)
+		defer engine.Close()
+		s := engine.NewSession()
+		_ = s.Model(&User{}).DropTable()
+
+		_, err := engine.Transaction(func(s *session.Session) (result interface{}, err error) {
+			_ = s.Model(&User{}).CreateTable()
+			_, err = s.Insert(&User{"Tom", 18})
+			return nil, errors.New("Error")
+		})
+
+		if err == nil || s.HasTable() {
+			t.Fatal("failed to rollback")
+		}
+	})
+
+	t.Run("commit", func(t *testing.T) {
+		engine := OpenDB(t)
+		defer engine.Close()
+		s := engine.NewSession()
+		_ = s.Model(&User{}).DropTable()
+
+		_, err := engine.Transaction(func(s *session.Session) (result interface{}, err error) {
+			_ = s.Model(&User{}).CreateTable()
+			_, err = s.Insert(&User{"Tom", 18})
+			return
+		})
+
+		var user User
+		_ = s.First(&user)
+
+		if err != nil || user.Name != "Tom" {
+			t.Fatal("failed to rollback")
+		}
+	})
+}
+```
+
+## 数据库迁移
+
+```go
+type User struct {
+	Name string `geeorm:"PRIMARY KEY"`
+	Age  int
+}
+
+func OpenDB(t *testing.T) *Engine {
+	t.Helper()
+	engine, err := NewEngine("sqlite3", "../db/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return engine
+}
+
+func TestEngine_Migrate(t *testing.T) {
+	engine := OpenDB(t)
+	defer engine.Close()
+	s := engine.NewSession()
+	_, _ = s.Raw("DROP TABLE IF EXISTS User;").Exec()
+	_, _ = s.Raw("CREATE TABLE User(Name text PRIMARY KEY, XXX integer);").Exec()
+	_, _ = s.Raw("INSERT INTO User(`Name`) values (?), (?)", "Tom", "Sam").Exec()
+	engine.Migrate(&User{})
+
+	rows, _ := s.Raw("SELECT * FROM User").QueryRows()
+	columns, _ := rows.Columns()
+	if !reflect.DeepEqual(columns, []string{"Name", "Age"}) {
+		t.Fatal("Failed to migrate table User, got columns", columns)
+	}
+}
 ```
