@@ -29,7 +29,19 @@ type Session struct {
 	refTable *schema.Schema
 	// 生成SQL语句
 	clause clause.Clause
+	// sql事务
+	tx *sql.Tx
 }
+
+//  CommonDB是db的最小函数集
+type CommonDB interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
+var _ CommonDB = (*sql.DB)(nil)
+var _ CommonDB = (*sql.Tx)(nil)
 
 func New(db *sql.DB, dialect dialect.Dialect) *Session {
 	return &Session{db: db, dialect: dialect}
@@ -41,7 +53,12 @@ func (session *Session) Clear() {
 	session.clause = clause.Clause{}
 }
 
-func (session *Session) DB() *sql.DB {
+func (session *Session) DB() CommonDB {
+	// 如果存在事务的话，通过tx去执行
+	if session.tx != nil {
+		return session.tx
+	}
+
 	return session.db
 }
 

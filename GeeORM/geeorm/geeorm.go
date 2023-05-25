@@ -14,7 +14,7 @@ import (
  */
 
 type Engine struct {
-	db *sql.DB
+	db      *sql.DB
 	dialect dialect.Dialect
 }
 
@@ -52,4 +52,36 @@ func (engine *Engine) Close() {
 // 通过 Engine 实例创建会话，进而与数据库进行交互
 func (engine *Engine) NewSession() *session.Session {
 	return session.New(engine.db, engine.dialect)
+}
+
+type TxFunc func(*session.Session) (interface{}, error)
+
+// 执行事务
+func (engine *Engine) Transaction(fn TxFunc) (result interface{}, err error) {
+	session := engine.NewSession()
+
+	if err := session.Begin(); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		// 发生错误，回滚+报错
+		// 否则，提交事务
+		if p := recover(); p != nil {
+			_ = session.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = session.Rollback()
+		} else {
+			// 如果事务提交失败，也进行回滚
+			defer func() {
+				if err != nil {
+					_ = session.Rollback()
+				}
+			}()
+			err = session.Commit()
+		}
+	}()
+
+	return fn(session)
 }
