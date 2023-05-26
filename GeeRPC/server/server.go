@@ -50,6 +50,7 @@ func (server *Server) Accept(lis net.Listener) {
 			log.Println("rpc server: accept error:", err)
 			return
 		}
+		fmt.Println("get a conn")
 
 		go server.ServeConn(conn)
 	}
@@ -106,8 +107,6 @@ func (server *Server) serveCodec(cc codec.Codec) {
 			server.sendResponse(cc, req.header, invalidRequest, sending)
 			return
 		}
-
-		fmt.Printf("[server] get request %d\n", req.header.Seq)
 
 		// handle request
 		wg.Add(1)
@@ -166,7 +165,7 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	defer wg.Done()
 
 	// TODO: should call registered rpc methods to get the right replyv
-	log.Println(req.header, req.argv.Elem())
+	log.Println("[server]", req.header, req.argv.Elem())
 	req.replyv = reflect.ValueOf(fmt.Sprintf("geerpc resp %d", req.header.Seq))
 	server.sendResponse(cc, req.header, req.replyv.Interface(), sending)
 }
