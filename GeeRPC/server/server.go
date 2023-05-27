@@ -73,6 +73,9 @@ func (server *Server) Register(rcvr interface{}) error {
 	if _, dup := server.serviceMap.LoadOrStore(s.name, s); dup {
 		return errors.New("rpc: service already defined: " + s.name)
 	}
+	for _, method := range s.method {
+		log.Printf("rpc server: register %s.%s\n", s.name, method.method.Name)
+	}
 	return nil
 }
 
@@ -109,7 +112,6 @@ func (server *Server) Accept(lis net.Listener) {
 			log.Println("rpc server: accept error:", err)
 			return
 		}
-		fmt.Println("get a conn")
 
 		go server.ServeConn(conn)
 	}
