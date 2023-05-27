@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 /* --------------------------------- 需要协商的内容 -------------------------------- */
@@ -26,14 +27,31 @@ import (
 
 const MagicNumber = 0x3bef5c
 
+/**
+ * timeout 超时处理：
+ * 	需要客户端处理超时的地方有：
+ * 		与服务端建立连接，导致的超时
+ * 		发送请求到服务端，写报文导致的超时
+ * 		等待服务端处理时，等待处理导致的超时（比如服务端已挂死，迟迟不响应）
+ *
+ * 		从服务端接收响应时，读报文导致的超时
+ * 	需要服务端处理超时的地方有：
+ * 		读取客户端请求报文时，读报文导致的超时
+ * 		发送响应报文时，写报文导致的超时
+ * 		调用映射服务的方法时，处理报文导致的超时
+ */
+
 type Option struct {
-	MagicNumber int        // MagicNumber marks this is a geerpc request
-	CodecType   codec.Type // client chooses the codec type
+	MagicNumber    int           // MagicNumber marks this is a geerpc request
+	CodecType      codec.Type    // client chooses the codec type
+	ConnectTimeout time.Duration // 0 means no limit
+	HandleTimeout  time.Duration
 }
 
 var DefaultOption = &Option{
-	MagicNumber: MagicNumber,
-	CodecType:   codec.GobType,
+	MagicNumber:    MagicNumber,
+	CodecType:      codec.GobType,
+	ConnectTimeout: time.Second * 10,
 }
 
 /* --------------------------------- Server --------------------------------- */
@@ -150,7 +168,7 @@ func (server *Server) serveCodec(cc codec.Codec) {
 
 		// handle request
 		wg.Add(1)
-		go server.handleRequest(cc, req, sending, wg)
+		go server.handleRequest(cc, req, sending, wg, time.Second * 10)
 	}
 }
 
@@ -215,16 +233,40 @@ func (server *Server) sendResponse(cc codec.Codec, header *codec.Header, body in
 	}
 }
 
-func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
+func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
 	defer wg.Done()
 
-	err := req.serv.call(req.mtype, req.argv, req.replyv)
-	if err != nil {
-		req.header.Error = err.Error()
-		server.sendResponse(cc, req.header, invalidRequest, sending)
+	called := make(chan struct{})
+	sent := make(chan struct{})
+
+	go func() {
+		err := req.serv.call(req.mtype, req.argv, req.replyv)
+		called <- struct{}{}
+
+		if err != nil {
+			req.header.Error = err.Error()
+			server.sendResponse(cc, req.header, invalidRequest, sending)
+			sent <- struct{}{}
+			return
+		}
+		server.sendResponse(cc, req.header, req.replyv.Interface(), sending)
+		sent <- struct{}{}
+	}()
+
+	// mean no timeout limit
+	if timeout == 0 {
+		<-called
+		<-sent
 		return
 	}
-	server.sendResponse(cc, req.header, req.replyv.Interface(), sending)
+
+	select {
+	case <-time.After(timeout):
+		req.header.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", timeout)
+		server.sendResponse(cc, req.header, invalidRequest, sending)
+	case <-called:
+		<-sent
+	}
 }
 
 /* -------------------------------- 结构体映射为服务 -------------------------------- */

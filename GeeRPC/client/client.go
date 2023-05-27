@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 /* ------------------------------ RPC Function ------------------------------ */
@@ -192,14 +194,21 @@ func parseOptions(opts ...*server.Option) (*server.Option, error) {
 	return opt, nil
 }
 
-// Dial connects to an RPC server at the specified network address
-func Dial(network string, address string, opts ...*server.Option) (client *Client, err error) {
+type clientResult struct {
+	client *Client
+	err    error
+}
+
+type newClientFunc func(conn net.Conn, opt *server.Option) (*Client, error)
+
+// dial with timeout
+func dialTimeout(f newClientFunc, network string, address string, opts ...*server.Option) (client *Client, err error) {
 	opt, err := parseOptions(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := net.Dial(network, address)
+	conn, err := net.DialTimeout(network, address, opt.ConnectTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +219,31 @@ func Dial(network string, address string, opts ...*server.Option) (client *Clien
 		}
 	}()
 
-	return NewClient(conn, opt)
+	// create a goroutine and send result by the channel
+	ch := make(chan clientResult)
+	go func() {
+		client, err := f(conn, opt)
+		ch <- clientResult{client: client, err: err}
+	}()
+
+	// mean no timeout limit
+	if opt.ConnectTimeout == 0 {
+		result := <-ch
+		return result.client, result.err
+	}
+
+	// if it's not done within opt.ConnectTimeout, it will return a error, otherwise, we will get the result
+	select {
+	case <-time.After(opt.ConnectTimeout):
+		return nil, fmt.Errorf("rpc client: connect timeout: expect within %s", opt.ConnectTimeout)
+	case result := <-ch:
+		return result.client, result.err
+	}
+}
+
+// Dial connects to an RPC server at the specified network address
+func Dial(network string, address string, opts ...*server.Option) (client *Client, err error) {
+	return dialTimeout(NewClient, network, address, opts...)
 }
 
 // send request
@@ -265,7 +298,22 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 // Call 是对 Go 的封装，阻塞 call.Done，等待响应返回，是一个同步接口。
 // Call invokes the named function, waits for it to complete,
 // and returns its error status.
-func (client *Client) Call(serviceMethod string, args interface{}, reply interface{}) error {
-	call := <-client.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
-	return call.Error
+func (client *Client) Call(ctx context.Context, serviceMethod string, args interface{}, reply interface{}) error {
+	// call := <-client.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
+	call := client.Go(serviceMethod, args, reply, make(chan *Call, 1))
+
+	select {
+	/**
+	 * client cancel the request
+	 * 		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	 * 		var reply int
+	 * 		err := client.Call(ctx, "Foo.Sum", &Args{1, 2}, &reply)
+	 */
+	case <-ctx.Done():
+		client.removeCall(call.Seq)
+		return errors.New("rpc client: call failed: " + ctx.Err().Error())
+	// request finish
+	case ca := <-call.Done:
+		return ca.Error
+	}
 }
