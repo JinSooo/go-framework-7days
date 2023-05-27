@@ -119,7 +119,6 @@ func (client *Client) receive() {
 
 	// wait a response coming in
 	for err == nil {
-
 		var header codec.Header
 		if err := client.cc.ReadHeader(&header); err != nil {
 			break
