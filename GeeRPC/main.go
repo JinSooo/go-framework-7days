@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"geerpc/client"
+	"geerpc/registry"
 	"geerpc/server"
 	"geerpc/xclient"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -26,15 +27,21 @@ func (f Foo) Sleep(args Args, reply *int) error {
 	return nil
 }
 
-func startServer(addr chan<- string) {
+func startRegistry(wg *sync.WaitGroup) {
+	l, _ := net.Listen("tcp", ":9999")
+	registry.HandleHTTP()
+	wg.Done()
+	_ = http.Serve(l, nil)
+}
+
+func startServer(registryAddr string, wg *sync.WaitGroup) {
 	var foo Foo
-	lis, _ := net.Listen("tcp", ":0")
+	l, _ := net.Listen("tcp", ":0")
 	server := server.NewServer()
 	_ = server.Register(&foo)
-	// server.HandleHTTP()
-	addr <- lis.Addr().String()
-	server.Accept(lis)
-	// http.Serve(lis, nil)
+	registry.Heartbeat(registryAddr, "tcp@"+l.Addr().String(), 0)
+	wg.Done()
+	server.Accept(l)
 }
 
 func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, args *Args) {
@@ -53,8 +60,8 @@ func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, ar
 	}
 }
 
-func call(addr1, addr2 string) {
-	d := xclient.NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+func call(registry string) {
+	d := xclient.NewGeeRegistryDiscovery(registry, 0)
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() { _ = xc.Close() }()
 	// send request & receive response
@@ -69,8 +76,8 @@ func call(addr1, addr2 string) {
 	wg.Wait()
 }
 
-func broadcast(addr1, addr2 string) {
-	d := xclient.NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+func broadcast(registry string) {
+	d := xclient.NewGeeRegistryDiscovery(registry, 0)
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() { _ = xc.Close() }()
 	var wg sync.WaitGroup
@@ -87,41 +94,22 @@ func broadcast(addr1, addr2 string) {
 	wg.Wait()
 }
 
-func startClient(addr <-chan string) {
-	client, _ := client.DialHTTP("tcp", <-addr)
-	defer func() { client.Close() }()
-
-	time.Sleep(time.Second)
-	var wg sync.WaitGroup
-
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-
-			args := &Args{Num1: i, Num2: i * i}
-			var reply int
-			if err := client.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
-				log.Fatal("call Foo.Sum error:", err)
-			}
-			log.Printf("[reply] %d + %d = %d", args.Num1, args.Num2, reply)
-		}(i)
-	}
-	wg.Wait()
-}
-
 func main() {
-	ch1 := make(chan string)
-	ch2 := make(chan string)
-	go startServer(ch1)
-	go startServer(ch2)
-
-	// startClient(addr)
-
-	addr1 := <-ch1
-	addr2 := <-ch2
+	log.SetFlags(0)
+	registryAddr := "http://localhost:9999/_geerpc/registry"
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go startRegistry(&wg)
+	wg.Wait()
 
 	time.Sleep(time.Second)
-	call(addr1, addr2)
-	broadcast(addr1, addr2)
+	wg.Add(2)
+	go startServer(registryAddr, &wg)
+	go startServer(registryAddr, &wg)
+	wg.Wait()
+
+	// time.Sleep(time.Second * 1000)
+	time.Sleep(time.Second)
+	call(registryAddr)
+	broadcast(registryAddr)
 }
