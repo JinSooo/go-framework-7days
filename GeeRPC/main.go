@@ -6,6 +6,7 @@ import (
 	"geerpc/server"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -21,23 +22,16 @@ func (f Foo) Sum(args Args, reply *int) error {
 
 func startServer(addr chan<- string) {
 	var foo Foo
-	if err := server.Register(&foo); err != nil {
-		log.Fatal("register error:", err)
-	}
-
-	// pick a free prot
-	lis, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Fatal("network error: ", err)
-	}
-
-	log.Println("start rpc server on", lis.Addr())
+	_ = server.Register(&foo)
+	lis, _ := net.Listen("tcp", ":8080")
+	server.HandleHTTP()
 	addr <- lis.Addr().String()
-	server.Accept(lis)
+	// server.Accept(lis)
+	http.Serve(lis, nil)
 }
 
 func startClient(addr <-chan string) {
-	client, _ := client.Dial("tcp", <-addr)
+	client, _ := client.DialHTTP("tcp", <-addr)
 	defer func() { client.Close() }()
 
 	time.Sleep(time.Second)
@@ -50,8 +44,7 @@ func startClient(addr <-chan string) {
 
 			args := &Args{Num1: i, Num2: i * i}
 			var reply int
-			ctx, _ := context.WithTimeout(context.Background(), time.Second * 5)
-			if err := client.Call(ctx, "Foo.Sum", args, &reply); err != nil {
+			if err := client.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
 				log.Fatal("call Foo.Sum error:", err)
 			}
 			log.Printf("[reply] %d + %d = %d", args.Num1, args.Num2, reply)
